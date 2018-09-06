@@ -22,7 +22,8 @@ import itertools as it
 
 import mpnum as mp
 import numpy as np
-from numpy.linalg import qr, svd
+from numpy.linalg import qr #, svd
+from scipy.linalg import svd
 from numpy.testing import assert_array_equal
 from six.moves import range, zip, zip_longest
 
@@ -916,7 +917,9 @@ class MPArray(object):
                 u, sv, v = svdfunc(ltens.reshape(matshape), rank)
                 rank_t = len(sv)
             else:
-                u, sv, v = svd(ltens.reshape(matshape))
+                # u, sv, v = svd(ltens.reshape(matshape))
+                u, sv, v = svd(ltens.reshape(matshape),lapack_driver='gesvd')
+
                 svsum = np.cumsum(sv) / np.sum(sv)
                 rank_relerr = np.searchsorted(svsum, 1 - relerr) + 1
                 rank_t = min(ltens.shape[0], v.shape[0], rank, rank_relerr)
@@ -947,10 +950,27 @@ class MPArray(object):
                 u, sv, v = svdfunc(ltens.reshape(matshape), rank)
                 rank_t = len(sv)
             else:
-                u, sv, v = svd(ltens.reshape(matshape))
+                try:
+                    # u, sv, v = svd(ltens.reshape(matshape))
+
+                    # temp_mat = ltens.reshape(matshape)
+                    # frobenius_norm = np.linalg.norm(temp_mat)
+                    u, sv, v = svd(ltens.reshape(matshape),lapack_driver='gesvd')
+                    # sv *= frobenius_norm
+
+                except np.linalg.linalg.LinAlgError as err:
+                    print(type(err),err)
+                    print("ltens.reshape(matshape) = \n{}".format(ltens.reshape(matshape)))
+                    print("condition: {}".format(np.linalg.cond(ltens.reshape(matshape))))
+                    print("frobenius_norm: {}".format(frobenius_norm))
+                    np.save('/home/alexander/phd/tedopa/projects/fermionic_resonant_level/ground_state/error_matrix',ltens.reshape(matshape))
+                    raise err
+
                 svsum = np.cumsum(sv) / np.sum(sv)
                 rank_relerr = np.searchsorted(svsum, 1 - relerr) + 1
                 rank_t = min(ltens.shape[-1], u.shape[1], rank, rank_relerr)
+                
+
 
             yield sv, rank_t
 
@@ -1252,7 +1272,6 @@ def inner(mpa1, mpa2):
                  for l, r in zip(mpa1.lt, mpa2.lt))
     return _ltens_to_array(ltens_new)[0, ..., 0]
 
-
 def sandwich(mpo, mps, mps2=None):
     """Compute ``<mps|MPO|mps>`` efficiently
 
@@ -1545,7 +1564,6 @@ def partialtrace(mpa, axes=(0, 1), mptype=None):
         lten if ax is None else np.trace(lten, axis1=ax[0], axis2=ax[1])
         for lten, ax in zip(mpa.lt, axes))
     return (mptype or type(mpa))(_prune_ltens(ltens))
-
 
 def trace(mpa, axes=(0, 1)):
     """Compute the trace of the given MPA.
