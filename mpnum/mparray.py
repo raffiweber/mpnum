@@ -20,6 +20,8 @@ from __future__ import absolute_import, division, print_function
 import collections
 import itertools as it
 
+import h5py
+
 import mpnum as mp
 import numpy as np
 from numpy.linalg import qr #, svd
@@ -154,7 +156,6 @@ class MPArray(object):
 
         """
         if isinstance(target, str):
-            import h5py
             with h5py.File(target, 'w') as outfile:
                 return self.dump(outfile)
 
@@ -1438,6 +1439,7 @@ def norm(mpa):
     take advantage of the canonicalization
 
     WARNING This also changes the MPA inplace by normalizing.
+    -> this is not true?!
 
     :param mpa: MPArray
     :returns: l2-norm of that array

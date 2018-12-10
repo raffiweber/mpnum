@@ -14,6 +14,8 @@ import itertools as it
 import numpy as np
 from scipy import sparse as sp
 
+import gc
+
 from six.moves import range
 
 from . import mparray as mp
@@ -22,7 +24,6 @@ from ._named_ndarray import named_ndarray
 from .factory import random_mpa
 
 __all__ = ['eig', 'eig_sum']
-
 
 def _eig_leftvec_add(leftvec, mpo_lten, mps_lten, mps_lten2=None):
     """Add one column to the left vector.
@@ -175,7 +176,7 @@ def _eig_sum_rightvec_add(
             raise ValueError('ndims = {!r} not supported'.format(ndims))
     return rightvec
 
-
+# @profile
 def _eig_local_op(leftvec, mpo_ltens, rightvec):
     """Create the operator for local eigenvalue minimization on few sites
 
@@ -261,7 +262,7 @@ def _eig_local_op_mps(lv, ltens, rv):
     # 1: (1a: left mps2 bond, 1b: physical column leg, 1c: right mps2 bond)
     return op
 
-
+# @profile
 def _eig_minimize_locally(leftvec, mpo_ltens, rightvec, eigvec_ltens,
                           eigs):
     """Perform the local eigenvalue minimization on few sites
@@ -293,7 +294,7 @@ def _eig_minimize_locally(leftvec, mpo_ltens, rightvec, eigvec_ltens,
     op = _eig_local_op(leftvec, list(mpo_ltens), rightvec)
     return _eig_minimize_locally2(op, list(eigvec_ltens), eigs)
 
-
+# @profile
 def _eig_minimize_locally2(local_op, eigvec_ltens, eigs):
     """Implement the main part of :func:`_eig_minimize_locally`
 
@@ -349,7 +350,7 @@ def _eig_sum_minimize_locally(
 
     return _eig_minimize_locally2(op, list(eigvec_ltens), eigs)
 
-
+# @profile
 def eig(mpo, num_sweeps, var_sites=2,
         startvec=None, startvec_rank=None, randstate=None, eigs=None):
     r"""Iterative search for MPO eigenvalues
@@ -467,6 +468,7 @@ def eig(mpo, num_sweeps, var_sites=2,
     else:
         # Do not modify the `startvec` argument.
         startvec = startvec.copy()
+        # pass
     # Can we avoid this overly complex check by improving
     # _eig_minimize_locally()? eigs() will fail under the excluded
     # conditions because of too small matrices.
@@ -535,6 +537,8 @@ def eig(mpo, num_sweeps, var_sites=2,
                 leftvecs[pos], mpo.lt[pos:pos_end], rightvecs[pos],
                 eigvec.lt[pos:pos_end], eigs)
             eigvec.lt[pos:pos_end] = eigvec_lten
+
+        # gc.collect()
 
     return eigval, eigvec
 
