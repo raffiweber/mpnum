@@ -19,20 +19,22 @@ from __future__ import absolute_import, division, print_function
 
 import collections
 import itertools as it
+from functools import partial
+from warnings import warn
 
 import h5py
 
 import mpnum as mp
 import numpy as np
-from numpy.linalg import qr #, svd
+from numpy.linalg import qr
+# from numpy.linalg import svd
 from scipy.linalg import svd
 from numpy.testing import assert_array_equal
 from six.moves import range, zip, zip_longest
 
 from ._named_ndarray import named_ndarray
 from .mpstruct import LocalTensors
-from .utils import (block_diag, global_to_local, local_to_global, matdot,
-                    truncated_svd)
+from .utils import (block_diag, global_to_local, local_to_global, matdot)
 
 __all__ = ['MPArray', 'dot', 'inject', 'inner', 'local_sum', 'localouter',
            'norm', 'normdist', 'chain', 'partialdot', 'partialtrace',
@@ -830,7 +832,7 @@ class MPArray(object):
             raise ValueError('{!r} is not a valid method'.format(method))
 
     def _compress_svd(self, rank=None, relerr=None, direction=None,
-                      canonicalize=True, svdfunc=truncated_svd):
+                      canonicalize=True, svdfunc=partial(svd, lapack_driver='gesdd')):
         """Compress `self` using SVD [:ref:`Sch11 <Sch11>`, Sec. 4.5.1]
 
         Parameters: See :func:`~compress()`.
@@ -915,11 +917,30 @@ class MPArray(object):
             ltens = self._lt[site]
             matshape = (ltens.shape[0], -1)
             if relerr is None:
-                u, sv, v = svdfunc(ltens.reshape(matshape), rank)
+                u, sv, v = svdfunc(ltens.reshape(matshape))
+                k_prime = min(rank, len(s))
+
+                u  = u[:,:k_prime]
+                sv = sv[:k_prime]
+                v  = v[:k_prime]
+
                 rank_t = len(sv)
             else:
-                # u, sv, v = svd(ltens.reshape(matshape))
-                u, sv, v = svd(ltens.reshape(matshape),lapack_driver='gesvd')
+                try: 
+
+                    u, sv, v = svdfunc(ltens.reshape(matshape))
+
+                except np.linalg.linalg.LinAlgError as err1:
+                    # Note: only makes sense when lapack driver was different from gesvd
+                    warn("WARNING: LinAlgError" + str(err1) + " occurred...trying lapack driver gesvd instead")
+
+                    try:
+
+                        u, sv, v = svd(ltens.reshape(matshape), lapack_driver='gesvd')
+
+                    except np.linalg.linalg.LinAlgError as err2:
+
+                        raise err1
 
                 svsum = np.cumsum(sv) / np.sum(sv)
                 rank_relerr = np.searchsorted(svsum, 1 - relerr) + 1
@@ -948,29 +969,34 @@ class MPArray(object):
             ltens = self._lt[site]
             matshape = (-1, ltens.shape[-1])
             if relerr is None:
-                u, sv, v = svdfunc(ltens.reshape(matshape), rank)
+                u, sv, v = svdfunc(ltens.reshape(matshape))
+                k_prime = min(rank, len(s))
+
+                u  = u[:,:k_prime]
+                sv = sv[:k_prime]
+                v  = v[:k_prime]
+
                 rank_t = len(sv)
             else:
-                try:
-                    # u, sv, v = svd(ltens.reshape(matshape))
+                try: 
 
-                    # temp_mat = ltens.reshape(matshape)
-                    # frobenius_norm = np.linalg.norm(temp_mat)
-                    u, sv, v = svd(ltens.reshape(matshape),lapack_driver='gesvd')
-                    # sv *= frobenius_norm
+                    u, sv, v = svdfunc(ltens.reshape(matshape))
 
-                except np.linalg.linalg.LinAlgError as err:
-                    print(type(err),err)
-                    print("ltens.reshape(matshape) = \n{}".format(ltens.reshape(matshape)))
-                    print("condition: {}".format(np.linalg.cond(ltens.reshape(matshape))))
-                    print("frobenius_norm: {}".format(frobenius_norm))
-                    np.save('/home/alexander/phd/tedopa/projects/fermionic_resonant_level/ground_state/error_matrix',ltens.reshape(matshape))
-                    raise err
+                except np.linalg.linalg.LinAlgError as err1:
+                    # Note: only makes sense when lapack driver was different from gesvd
+                    warn("WARNING: LinAlgError" + str(err1) + " occurred...trying lapack driver gesvd instead")
+
+                    try:
+
+                        u, sv, v = svd(ltens.reshape(matshape), lapack_driver='gesvd')
+
+                    except np.linalg.linalg.LinAlgError as err2:
+
+                        raise err1
 
                 svsum = np.cumsum(sv) / np.sum(sv)
                 rank_relerr = np.searchsorted(svsum, 1 - relerr) + 1
                 rank_t = min(ltens.shape[-1], u.shape[1], rank, rank_relerr)
-                
 
 
             yield sv, rank_t
@@ -996,7 +1022,7 @@ class MPArray(object):
         if len(self) == 1:
             return  # No bipartitions with two non-empty parts for a single site
         self.canonicalize(right=1)
-        iterator = self._compress_svd_r(max(self.ranks), None, truncated_svd)
+        iterator = self._compress_svd_r(max(self.ranks), None, partial(svd, lapack_driver='gesdd'))
         # We want everything from the iterator except for the last element.
         for _, (sv, rank) in zip(range(len(self) - 1), iterator):
             # We could verify that `rank` did not decrease but it may
