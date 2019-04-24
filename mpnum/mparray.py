@@ -761,9 +761,10 @@ class MPArray(object):
             smaller resulting rank is used.
 
         :param stable: Determines which kind of svd compression is used by default.
-            True uses the scipy svd with ``'gesvd'`` lapack_driver and False uses
-            the scipy svd with the faster ``'gesdd'`` lapack_driver
-            (and if that fails, uses ``'gesvd'`` as backup). (default: ``False``)
+            True uses the scipy svd with ``'gesvd'`` lapack_driver while False uses
+            the scipy svd with the faster ``'gesdd'`` lapack_driver or the
+            user provided svdfunc (and if that fails, uses ``'gesvd'`` as backup).
+            (default: ``False``)
 
         :param direction: ``'right'`` (sweep from left to right), ``'left'``
             (inverse) or ``None`` (choose depending on
