@@ -760,6 +760,11 @@ class MPArray(object):
             Default ``0``.  If both rank and relerr are given, the
             smaller resulting rank is used.
 
+        :param stable: Determines which kind of svd compression is used by default.
+            True uses the scipy svd with ``'gesvd'`` lapack_driver and False uses
+            the scipy svd with the faster ``'gesdd'`` lapack_driver
+            (and if that fails, uses ``'gesvd'`` as backup). (default: ``False``)
+
         :param direction: ``'right'`` (sweep from left to right), ``'left'``
             (inverse) or ``None`` (choose depending on
             canonicalization). (default: ``None``)
@@ -940,9 +945,13 @@ class MPArray(object):
                 rank_t = min(ltens.shape[0], v.shape[0], rank, rank_relerr)
 
             yield sv, rank_t
-
-            newtens = (matdot(self._lt[site - 1], u[:, :rank_t] * sv[None, :rank_t]),
-                       v[:rank_t, :].reshape((rank_t, ) + ltens.shape[1:]).copy())
+            # If the compressed v is small enough, copy it and let the gc clean up the original v
+            if v[:rank_t, :].size/v.size < 0.7:
+                newtens = (matdot(self._lt[site - 1], u[:, :rank_t] * sv[None, :rank_t]),
+                           v[:rank_t, :].reshape((rank_t, ) + ltens.shape[1:]).copy())
+            else:
+                newtens = (matdot(self._lt[site - 1], u[:, :rank_t] * sv[None, :rank_t]),
+                           v[:rank_t, :].reshape((rank_t, ) + ltens.shape[1:]))
             self._lt.update(slice(site - 1, site + 1), newtens,
                             canonicalization=(None, 'right'))
 
@@ -987,8 +996,13 @@ class MPArray(object):
                 rank_relerr = np.searchsorted(svsum, 1 - relerr) + 1
                 rank_t = min(ltens.shape[-1], u.shape[1], rank, rank_relerr)
             yield sv, rank_t
-            newtens = (u[:, :rank_t].reshape(ltens.shape[:-1] + (rank_t, )).copy(),
-                       matdot(sv[:rank_t, None] * v[:rank_t, :], self._lt[site + 1]))
+            # If the compressed v is small enough, copy it and let the gc clean up the original v
+            if v[:rank_t, :].size/v.size < 0.7:
+                newtens = (u[:, :rank_t].reshape(ltens.shape[:-1] + (rank_t, )).copy(),
+                           matdot(sv[:rank_t, None] * v[:rank_t, :], self._lt[site + 1]))
+            else:
+                newtens = (u[:, :rank_t].reshape(ltens.shape[:-1] + (rank_t, )),
+                           matdot(sv[:rank_t, None] * v[:rank_t, :], self._lt[site + 1]))
             self._lt.update(slice(site, site + 2), newtens,
                             canonicalization=('left', None))
         yield np.sum(np.abs(self._lt[-1])**2)
