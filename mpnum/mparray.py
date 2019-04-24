@@ -997,8 +997,8 @@ class MPArray(object):
                 rank_relerr = np.searchsorted(svsum, 1 - relerr) + 1
                 rank_t = min(ltens.shape[-1], u.shape[1], rank, rank_relerr)
             yield sv, rank_t
-            # If the compressed v is small enough, copy it and let the gc clean up the original v
-            if v[:rank_t, :].size/v.size < 0.7:
+            # If the compressed u is small enough, copy it and let the gc clean up the original u
+            if u[:rank_t, :].size/u.size < 0.7:
                 newtens = (u[:, :rank_t].reshape(ltens.shape[:-1] + (rank_t, )).copy(),
                            matdot(sv[:rank_t, None] * v[:rank_t, :], self._lt[site + 1]))
             else:
