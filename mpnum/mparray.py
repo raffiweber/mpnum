@@ -1022,7 +1022,7 @@ class MPArray(object):
         if len(self) == 1:
             return  # No bipartitions with two non-empty parts for a single site
         self.canonicalize(right=1)
-        iterator = self._compress_svd_r(max(self.ranks), None, partial(svd, lapack_driver='gesdd'))
+        iterator = self._compress_svd_r(max(self.ranks), None, partial(svd, lapack_driver='gesdd', full_matrices=False))
         # We want everything from the iterator except for the last element.
         for _, (sv, rank) in zip(range(len(self) - 1), iterator):
             # We could verify that `rank` did not decrease but it may
