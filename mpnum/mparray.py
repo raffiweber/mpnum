@@ -854,13 +854,13 @@ class MPArray(object):
         if direction == 'right':
             if canonicalize:
                 self.canonicalize(right=1)
-            for item in self._compress_svd_r(rank, relerr, svdfunc, stable):
+            for item in self._compress_svd_r(rank, relerr, svdfunc, stable=stable):
                 pass
             return item
         elif direction == 'left':
             if canonicalize:
                 self.canonicalize(left=len(self) - 1)
-            for item in self._compress_svd_l(rank, relerr, svdfunc, stable):
+            for item in self._compress_svd_l(rank, relerr, svdfunc, stable=stable):
                 pass
             return item
         raise ValueError('{} is not a valid direction'.format(direction))
@@ -905,7 +905,7 @@ class MPArray(object):
         compr = compr.reshape(shape)
         return compr, overlap
 
-    def _compress_svd_l(self, rank, relerr, svdfunc, stable):
+    def _compress_svd_l(self, rank, relerr, svdfunc, stable=False):
         """Compresses the MPA in place from right to left using SVD;
         yields a right-canonical state
 
@@ -958,7 +958,7 @@ class MPArray(object):
 
         yield np.sum(np.abs(self._lt[0])**2)
 
-    def _compress_svd_r(self, rank, relerr, svdfunc, stable):
+    def _compress_svd_r(self, rank, relerr, svdfunc, stable=False):
         """Compresses the MPA in place from left to right using SVD;
         yields a left-canonical state
 
