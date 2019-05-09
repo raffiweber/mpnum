@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [unreleased]
 
+## [1.0.3] 2019-05-09
+### Fixed
+
+- Fixed small memory leak in svd compression
+
+### Added
+
+- Optimized svd compression a bit
+
 
 ## [1.0.2] 2017-12-13
 
