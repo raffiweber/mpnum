@@ -727,7 +727,7 @@ class MPArray(object):
             q, s, r = svd(ltens.reshape((-1, ltens.shape[-1])),
                                     full_matrices=False)
             s /= np.linalg.norm(s)
-            r = np.diag(s) @ r
+            r  = np.multiply(s[:, None], r)
             # if ltens.shape[-1] > prod(ltens.phys_shape) --> trivial comp.
             # can be accounted by adapting rank here
             newtens = (q.reshape(ltens.shape[:-1] + (-1,)),
@@ -772,7 +772,7 @@ class MPArray(object):
             q, s, r = svd(ltens.reshape((ltens.shape[0], -1)).T, 
                                     full_matrices=False)
             s /= np.linalg.norm(s)
-            r = np.diag(s) @ r
+            r  = np.multiply(s[:, None], r)
             # if ltens.shape[-1] > prod(ltens.phys_shape) --> trivial comp.
             # can be accounted by adapting rank here
             newtens = (matdot(self._lt[site - 1], r.T),
