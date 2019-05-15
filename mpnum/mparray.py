@@ -591,9 +591,20 @@ class MPArray(object):
     ################################
     #  Normalizaton & Compression  #
     ################################
-    def canonicalize(self, left=None, right=None):
+    def canonicalize(self, left=None, right=None, method='qr'):
         """Brings the MPA to canonical form in place
         [:ref:`Sch11 <Sch11>`, Sec. 4.4]
+
+        :param left:    boundary for left canonicalization
+
+        :param right:   boundary for right canonicalization
+
+        :param method:  method to perform canonicalization
+                        'qr'    for QR decomposition
+                        'svd'   for SVD decomposition (singular values are
+                                normalized during procedure; useful if you
+                                canonicalize large random mpas; otherwise you
+                                will most likely get NaNs; norm CHANGES)
 
         Note that we do not support full left- or right-canonicalization. In
         general, the right- (left- resp.)most local tensor cannot be in a
@@ -642,12 +653,19 @@ class MPArray(object):
         - Matrix would be both left- and right-normalized: ``ValueError``
 
         """
+
+        lcanonicalize_dict = {  'qr':  self._lcanonicalize_qr,
+                                'svd': self._lcanonicalize_svd}
+        rcanonicalize_dict = {  'qr':  self._rcanonicalize_qr,
+                                'svd': self._rcanonicalize_svd}
+
+
         current_lcanon, current_rcanon = self.canonical_form
         if left is None and right is None:
             if current_lcanon < len(self) - current_rcanon:
-                self._lcanonicalize(1)
+                lcanonicalize_dict[method](1)
             else:
-                self._rcanonicalize(len(self) - 1)
+                rcanonicalize_dict[method](len(self) - 1)
             return
 
         # Fill the special values for `None` and 'afull'.
@@ -668,12 +686,13 @@ class MPArray(object):
             raise ValueError("Canonicalization {}:{} invalid"
                              .format(target_lcanon, target_rcanon))
         if current_lcanon < target_lcanon:
-            self._rcanonicalize(target_lcanon)
+            rcanonicalize_dict[method](target_lcanon)
         if current_rcanon > target_rcanon:
-            self._lcanonicalize(target_rcanon)
+            lcanonicalize_dict[method](target_rcanon)
 
-    def _rcanonicalize(self, to_site):
-        """Left-canonicalizes all local tensors _ltens[:to_site] in place
+    def _rcanonicalize_qr(self, to_site):
+        """Left-canonicalizes all local tensors _ltens[:to_site] in place 
+        using QR decomposition
 
         :param to_site: Index of the site up to which canonicalization is to be
             performed
@@ -692,8 +711,33 @@ class MPArray(object):
             self._lt.update(slice(site, site + 2), newtens,
                             canonicalization=('left', None))
 
-    def _lcanonicalize(self, to_site):
+    def _rcanonicalize_svd(self, to_site):
+        """Left-canonicalizes all local tensors _ltens[:to_site] in place 
+        using SVD decomposition
+
+        :param to_site: Index of the site up to which canonicalization is to be
+            performed
+
+        """
+        assert 0 <= to_site < len(self), 'to_site={!r}'.format(to_site)
+
+        lcanon, rcanon = self._lt.canonical_form
+        for site in range(lcanon, to_site):
+            ltens = self._lt[site]
+            q, s, r = svd(ltens.reshape((-1, ltens.shape[-1])),
+                                    full_matrices=False)
+            s /= np.linalg.norm(s)
+            r  = np.multiply(s[:, None], r)
+            # if ltens.shape[-1] > prod(ltens.phys_shape) --> trivial comp.
+            # can be accounted by adapting rank here
+            newtens = (q.reshape(ltens.shape[:-1] + (-1,)),
+                       matdot(r, self._lt[site + 1]))
+            self._lt.update(slice(site, site + 2), newtens,
+                            canonicalization=('left', None))
+
+    def _lcanonicalize_qr(self, to_site):
         """Right-canonicalizes all local tensors _ltens[to_site:] in place
+        using QR decomposition
 
         :param to_site: Index of the site up to which canonicalization is to be
             performed
@@ -705,6 +749,30 @@ class MPArray(object):
         for site in range(rcanon - 1, to_site - 1, -1):
             ltens = self._lt[site]
             q, r = qr(ltens.reshape((ltens.shape[0], -1)).T)
+            # if ltens.shape[-1] > prod(ltens.phys_shape) --> trivial comp.
+            # can be accounted by adapting rank here
+            newtens = (matdot(self._lt[site - 1], r.T),
+                       q.T.reshape((-1,) + ltens.shape[1:]))
+            self._lt.update(slice(site - 1, site + 1), newtens,
+                            canonicalization=(None, 'right'))
+
+    def _lcanonicalize_svd(self, to_site):
+        """Right-canonicalizes all local tensors _ltens[to_site:] in place
+        using SVD decomposition
+
+        :param to_site: Index of the site up to which canonicalization is to be
+            performed
+
+        """
+        assert 0 < to_site <= len(self), 'to_site={!r}'.format(to_site)
+
+        lcanon, rcanon = self.canonical_form
+        for site in range(rcanon - 1, to_site - 1, -1):
+            ltens = self._lt[site]
+            q, s, r = svd(ltens.reshape((ltens.shape[0], -1)).T, 
+                                    full_matrices=False)
+            s /= np.linalg.norm(s)
+            r  = np.multiply(s[:, None], r)
             # if ltens.shape[-1] > prod(ltens.phys_shape) --> trivial comp.
             # can be accounted by adapting rank here
             newtens = (matdot(self._lt[site - 1], r.T),
