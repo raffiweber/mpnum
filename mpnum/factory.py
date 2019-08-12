@@ -238,7 +238,7 @@ def random_mpa(sites, ldim, rank, randstate=None, normalized=False,
     return mpa
 
 
-def zero(sites, ldim, rank, force_rank=False):
+def zero(sites, ldim, rank, force_rank=False, dtype=float):
     """Returns a MPA with localtensors beeing zero (but of given shape)
 
     :param sites: Number of sites
@@ -253,10 +253,11 @@ def zero(sites, ldim, rank, force_rank=False):
     :param rank: Rank
     :param force_rank: If True, the rank is exaclty `rank`.
         Otherwise, it might be reduced if we reach the maximum sensible rank.
+    :param dtype: Specify dtype of underlying np.ndarray data structure
     :returns: Representation of the zero-array as MPA
 
     """
-    return _generate(sites, ldim, rank, np.zeros, force_rank)
+    return _generate(sites, ldim, rank, ft.partial(np.zeros, dtype=dtype), force_rank)
 
 
 def eye(sites, ldim):
