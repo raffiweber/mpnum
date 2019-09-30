@@ -59,6 +59,8 @@ Alternatives:
 * [ttpy](https://github.com/oseledets/ttpy) for Python
 * [ITensor](https://github.com/ITensor/ITensor) for C++
 * [t3f](https://github.com/Bihaqo/t3f) for TensorFlow
+* [Alps](https://github.com/ALPSCore/ALPSCore) for C++
+* [uni10](https://gitlab.com/uni10/uni10/) for C++
 
 
 ## How to contribute
