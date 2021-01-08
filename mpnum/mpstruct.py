@@ -4,7 +4,7 @@ from __future__ import absolute_import, division, print_function
 
 import itertools as it
 import collections
-
+import numpy as np
 from six.moves import range, zip
 
 
@@ -14,7 +14,10 @@ __all__ = ['LocalTensors']
 def _roview(array):
     """Creates a read only view of the numpy array `view`."""
     view = array.view()
-    view.setflags(write=False)
+    
+    if type(array) == np.ndarray:
+        view.setflags(write=False)
+    
     return view
 
 
