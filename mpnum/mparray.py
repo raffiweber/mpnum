@@ -184,7 +184,7 @@ class MPArray(object):
             with h5py.File(source, 'r') as infile:
                 return cls.load(infile)
 
-        ltens = [source[str(i)] for i in range(source.attrs['len'])]
+        ltens = [source[str(i)][()] for i in range(source.attrs['len'])]
         return cls(LocalTensors(ltens, cform=source.attrs['canonical_form']))
 
     @classmethod
