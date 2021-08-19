@@ -242,15 +242,15 @@ def approx_range_finder(A, sketch_size, n_iter, piter_normalizer='auto',
             Q = A * Q
             Q = A.H * Q
         elif piter_normalizer == 'LU':
-            Q, _ = linalg.lu(A * Q, permute_l=True)
-            Q, _ = linalg.lu(A.H * Q, permute_l=True)
+            Q, _ = sp.linalg.lu(A * Q, permute_l=True)
+            Q, _ = sp.linalg.lu(A.H * Q, permute_l=True)
         elif piter_normalizer == 'QR':
-            Q, _ = linalg.qr(A * Q, mode='economic')
-            Q, _ = linalg.qr(A.H * Q, mode='economic')
+            Q, _ = sp.linalg.qr(A * Q, mode='economic')
+            Q, _ = sp.linalg.qr(A.H * Q, mode='economic')
 
     # Sample the range of A using by linear projection of Q
     # Extract an orthonormal basis
-    Q, _ = linalg.qr(A * Q, mode='economic')
+    Q, _ = sp.linalg.qr(A * Q, mode='economic')
     return Q
 
 
@@ -333,7 +333,7 @@ def randomized_svd(M, n_components, n_oversamples=10, n_iter='auto',
     B = (M.H * Q).conj().T
 
     # compute the SVD on the thin matrix: (k + p) wide
-    Uhat, s, V = linalg.svd(B, full_matrices=False)
+    Uhat, s, V = sp.linalg.svd(B, full_matrices=False)
     del B
     U = np.dot(Q, Uhat)
     sel = slice(None, n_components, 1)

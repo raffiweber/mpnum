@@ -996,7 +996,7 @@ class MPArray(object):
 
                     u, sv, v    = trunc_svdfunc(ltens.reshape(matshape), rank)
 
-                    rank_relerr = np.searchsorted(sv/sv[0], relerr) + 1
+                    rank_relerr = np.searchsorted(sv[0]/sv, 1/relerr)
                     rank_t      = min(ltens.shape[0], v.shape[0], rank_relerr)
 
                 # svdfunc is used -> approximation in Frobenius norm
@@ -1100,7 +1100,7 @@ class MPArray(object):
 
                     u, sv, v    = trunc_svdfunc(ltens.reshape(matshape), rank)
 
-                    rank_relerr = np.searchsorted(sv/sv[0], relerr) + 1
+                    rank_relerr = np.searchsorted(sv[0]/sv, 1/relerr)
                     rank_t = min(ltens.shape[-1], u.shape[1], rank_relerr)
 
                 # svdfunc is used -> approximation in Frobenius norm
