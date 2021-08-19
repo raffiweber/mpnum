@@ -875,6 +875,8 @@ class MPArray(object):
         * ``'svd'``: Singular value truncation, [:ref:`Sch11 <Sch11>`, Sec. 4.5.1]
         * ``'var'``: Variational compression, [:ref:`Sch11 <Sch11>`, Sec. 4.5.2]
 
+        :TODO: Update docs for refactored svd compression
+
         """
         if method == 'svd':
             return self._compress_svd(**kwargs)
