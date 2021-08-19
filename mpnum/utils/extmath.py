@@ -4,12 +4,14 @@
 from __future__ import division, print_function
 
 import numpy as np
-from scipy import linalg
+import scipy as sp
+# from scipy import linalg
+# from scipy.linalg import svd
 from scipy.sparse.linalg import aslinearoperator
 from six.moves import range, zip
 
 __all__ = ['block_diag', 'matdot', 'mkron', 'partial_trace',
-           'truncated_svd', 'randomized_svd']
+           'truncated_svd', 'randomized_svd', 'lapack_svd']
 
 
 def partial_trace(array, traceout):
@@ -124,6 +126,31 @@ def truncated_svd(A, k):
     u, s, v = np.linalg.svd(A)
     k_prime = min(k, len(s))
     return u[:, :k_prime], s[:k_prime], v[:k_prime]
+
+
+def lapack_svd(A):
+    """
+        Wrapper for Lapack SVD. GESDD is preferred since it's supposed to be faster. If it fails GESVD is called.
+        In both cases a full (non-truncated) thin SVD is returned.
+
+        :param A:   Matrix to compute SVD of
+
+        :returns: u, sv, vh such that A = u @ np.diag(sv) @ vh
+    """
+    try:
+        u, sv, vh = sp.linalg.svd(A, lapack_driver='gesdd', overwrite_a=True,
+                           full_matrices=False)
+
+    except np.linalg.linalg.LinAlgError as err1:
+
+        warn("WARNING: LinAlgError: " + str(err1) + " occurred...trying lapack driver gesvd")
+        try:
+            u, sv, vh = sp.linalg.svd(A, lapack_driver='gesvd', overwrite_a=True,
+                           full_matrices=False)
+        except np.linalg.linalg.LinAlgError as err2:
+            raise err2
+
+    return u, sv, vh
 
 
 ####################

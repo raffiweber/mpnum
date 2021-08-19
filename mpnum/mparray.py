@@ -32,7 +32,7 @@ from six.moves import range, zip, zip_longest
 
 from ._named_ndarray import named_ndarray
 from .mpstruct import LocalTensors
-from .utils import (block_diag, global_to_local, local_to_global, matdot)
+from .utils import (block_diag, global_to_local, local_to_global, matdot, lapack_svd)
 
 __all__ = ['MPArray', 'dot', 'inject', 'inner', 'local_sum', 'localouter',
            'norm', 'normdist', 'chain', 'partialdot', 'partialtrace',
@@ -904,8 +904,7 @@ class MPArray(object):
             raise ValueError('{!r} is not a valid method'.format(method))
 
     def _compress_svd(self, rank=None, relerr=None, direction=None,
-                      canonicalize=True, stable=False, svdfunc=partial(svd, lapack_driver='gesdd',
-                                                                       full_matrices=False)):
+                      canonicalize=True, svdfunc=lapack_svd, trunc_svdfunc=None):
         """Compress `self` using SVD [:ref:`Sch11 <Sch11>`, Sec. 4.5.1]
 
         Parameters: See :func:`~compress()`.
@@ -922,13 +921,13 @@ class MPArray(object):
         if direction == 'right':
             if canonicalize:
                 self.canonicalize(right=1)
-            for item in self._compress_svd_r(rank, relerr, svdfunc, stable=stable):
+            for item in self._compress_svd_r(rank, relerr, svdfunc, trunc_svdfunc):
                 pass
             return item
         elif direction == 'left':
             if canonicalize:
                 self.canonicalize(left=len(self) - 1)
-            for item in self._compress_svd_l(rank, relerr, svdfunc, stable=stable):
+            for item in self._compress_svd_l(rank, relerr, svdfunc, trunc_svdfunc):
                 pass
             return item
         raise ValueError('{} is not a valid direction'.format(direction))
@@ -973,7 +972,7 @@ class MPArray(object):
         compr = compr.reshape(shape)
         return compr, overlap
 
-    def _compress_svd_l(self, rank, relerr, svdfunc, stable=False):
+    def _compress_svd_l(self, rank, relerr, svdfunc, trunc_svdfunc=None):
         """Compresses the MPA in place from right to left using SVD;
         yields a right-canonical state
 
@@ -983,37 +982,88 @@ class MPArray(object):
         assert rank > 0, "Cannot compress to rank={}".format(rank)
         assert (relerr is None) or ((0. <= relerr) and (relerr <= 1.)), \
             "relerr={} not allowed".format(relerr)
+
         for site in range(len(self) - 1, 0, -1):
             ltens = self._lt[site]
             matshape = (ltens.shape[0], -1)
-            if not stable:
-                try:
+
+            # both relerr and rank are set
+            if (relerr is not None) and (rank is not None):
+                # print("case 1")
+
+                # trunc_svdfunc is used -> approximation in spectral norm
+                if trunc_svdfunc is not None:
+
+                    u, sv, v    = trunc_svdfunc(ltens.reshape(matshape), rank)
+
+                    rank_relerr = np.searchsorted(sv/sv[0], relerr) + 1
+                    rank_t      = min(ltens.shape[0], v.shape[0], rank_relerr)
+
+                # svdfunc is used -> approximation in Frobenius norm
+                else:
+
+                    u, sv, v    = svdfunc(ltens.reshape(matshape))
+
+                    svsum       = np.cumsum(sv) / np.sum(sv)
+                    rank_relerr = np.searchsorted(svsum, 1 - relerr) + 1
+                    rank_t      = min(ltens.shape[0], v.shape[0], rank, rank_relerr)
+
+            # only relerr is set
+            elif (relerr is not None) and (rank is None):
+                # print("case 2")
+
+                if trunc_svdfunc is not None:
+
+                    raise NotImplementedError('Please set svdfunc instead.')
+
+                else:
+
+                    u, sv, v    = svdfunc(ltens.reshape(matshape))
+
+                    svsum       = np.cumsum(sv) / np.sum(sv)
+                    rank_relerr = np.searchsorted(svsum, 1 - relerr) + 1
+                    rank_t      = min(ltens.shape[0], v.shape[0], rank_relerr)
+
+            # only rank is set
+            elif (relerr is None) and (rank is not None):
+                # print("case 3")
+
+                if trunc_svdfunc is not None:
+
+                    u, sv, v = trunc_svdfunc(ltens.reshape(matshape), rank)
+
+                else:
+
                     u, sv, v = svdfunc(ltens.reshape(matshape))
-                except np.linalg.linalg.LinAlgError as err1:
-                    # Note: only makes sense when lapack driver was different from gesvd
-                    warn("WARNING: LinAlgError: " + str(err1) + " occurred...trying lapack driver gesvd")
-                    try:
-                        u, sv, v = svd(ltens.reshape(matshape), lapack_driver='gesvd', overwrite_a=True,
-                                       full_matrices=False)
-                    except np.linalg.linalg.LinAlgError as err2:
-                        raise err2
-            else:
-                u, sv, v = svd(ltens.reshape(matshape), lapack_driver='gesvd', overwrite_a=True,
-                               full_matrices=False)
-            if relerr is None:
-                k_prime = min(rank, len(sv))
 
-                u = u[:, :k_prime]
-                sv = sv[:k_prime]
-                v = v[:k_prime, :]
+                    k_prime = min(rank, len(sv))
+                    u  = u[:, :k_prime]
+                    sv = sv[:k_prime]
+                    v  = v[:k_prime, :]
 
-                rank_t = len(sv)
+                    rank_t = len(sv)
+
             else:
-                svsum = np.cumsum(sv) / np.sum(sv)
-                rank_relerr = np.searchsorted(svsum, 1 - relerr) + 1
-                rank_t = min(ltens.shape[0], v.shape[0], rank, rank_relerr)
+                raise ValueError('Neither relerr nor rank is set.')
+
+            # u, sv, v = svdfunc(ltens.reshape(matshape))            
+
+            # if relerr is None:
+            #     k_prime = min(rank, len(sv))
+
+            #     u  = u[:, :k_prime]
+            #     sv = sv[:k_prime]
+            #     v  = v[:k_prime, :]
+
+            #     rank_t = len(sv)
+
+            # else:
+            #     svsum = np.cumsum(sv) / np.sum(sv)
+            #     rank_relerr = np.searchsorted(svsum, 1 - relerr) + 1
+            #     rank_t = min(ltens.shape[0], v.shape[0], rank, rank_relerr)
 
             yield sv, rank_t
+
             # If the compressed v is small enough, copy it and let the gc clean up the original v
             if v[:rank_t, :].size/v.size < 0.7:
                 newtens = (matdot(self._lt[site - 1], u[:, :rank_t] * sv[None, :rank_t]),
@@ -1021,12 +1071,14 @@ class MPArray(object):
             else:
                 newtens = (matdot(self._lt[site - 1], u[:, :rank_t] * sv[None, :rank_t]),
                            v[:rank_t, :].reshape((rank_t, ) + ltens.shape[1:]))
+
             self._lt.update(slice(site - 1, site + 1), newtens,
                             canonicalization=(None, 'right'))
 
         yield np.sum(np.abs(self._lt[0])**2)
 
-    def _compress_svd_r(self, rank, relerr, svdfunc, stable=False):
+
+    def _compress_svd_r(self, rank, relerr, svdfunc, trunc_svdfunc=None):
         """Compresses the MPA in place from left to right using SVD;
         yields a left-canonical state
 
@@ -1038,42 +1090,97 @@ class MPArray(object):
         for site in range(len(self) - 1):
             ltens = self._lt[site]
             matshape = (-1, ltens.shape[-1])
-            if not stable:
-                try:
+
+            # both relerr and rank are set
+            if (relerr is not None) and (rank is not None):
+                # print("case 1")
+
+                # trunc_svdfunc is used -> approximation in spectral norm
+                if trunc_svdfunc is not None:
+
+                    u, sv, v    = trunc_svdfunc(ltens.reshape(matshape), rank)
+
+                    rank_relerr = np.searchsorted(sv/sv[0], relerr) + 1
+                    rank_t = min(ltens.shape[-1], u.shape[1], rank_relerr)
+
+                # svdfunc is used -> approximation in Frobenius norm
+                else:
+
+                    u, sv, v    = svdfunc(ltens.reshape(matshape))
+
+                    svsum       = np.cumsum(sv) / np.sum(sv)
+                    rank_relerr = np.searchsorted(svsum, 1 - relerr) + 1
+                    rank_t = min(ltens.shape[-1], u.shape[1], rank, rank_relerr)
+
+            # only relerr is set
+            elif (relerr is not None) and (rank is None):
+                # print("case 2")
+
+                if trunc_svdfunc is not None:
+
+                    raise NotImplementedError('Please set svdfunc instead.')
+
+                else:
+
+                    u, sv, v    = svdfunc(ltens.reshape(matshape))
+
+                    svsum       = np.cumsum(sv) / np.sum(sv)
+                    rank_relerr = np.searchsorted(svsum, 1 - relerr) + 1
+                    rank_t = min(ltens.shape[-1], u.shape[1], rank_relerr)
+
+            # only rank is set
+            elif (relerr is None) and (rank is not None):
+                # print("case 3")
+
+                if trunc_svdfunc is not None:
+
+                    u, sv, v = trunc_svdfunc(ltens.reshape(matshape), rank)
+
+                else:
+
                     u, sv, v = svdfunc(ltens.reshape(matshape))
-                except np.linalg.linalg.LinAlgError as err1:
-                    # Note: only makes sense when lapack driver was different from gesvd
-                    warn("WARNING: LinAlgError: " + str(err1) + " occurred...trying lapack driver gesvd")
-                    try:
-                        u, sv, v = svd(ltens.reshape(matshape), lapack_driver='gesvd', overwrite_a=True,
-                                       full_matrices=False)
-                    except np.linalg.linalg.LinAlgError as err2:
-                        raise err2
-            else:
-                u, sv, v = svd(ltens.reshape(matshape), lapack_driver='gesvd', overwrite_a=True,
-                               full_matrices=False)
-            if relerr is None:
-                k_prime = min(rank, len(sv))
 
-                u = u[:, :k_prime]
-                sv = sv[:k_prime]
-                v = v[:k_prime, :]
+                    k_prime = min(rank, len(sv))
+                    u  = u[:, :k_prime]
+                    sv = sv[:k_prime]
+                    v  = v[:k_prime, :]
 
-                rank_t = len(sv)
+                    rank_t = len(sv)
+
             else:
-                svsum = np.cumsum(sv) / np.sum(sv)
-                rank_relerr = np.searchsorted(svsum, 1 - relerr) + 1
-                rank_t = min(ltens.shape[-1], u.shape[1], rank, rank_relerr)
+                raise ValueError('Neither relerr nor rank is set.')
+
+
+            # u, sv, v = svdfunc(ltens.reshape(matshape))            
+
+            # if relerr is None:
+            #     k_prime = min(rank, len(sv))
+
+            #     u = u[:, :k_prime]
+            #     sv = sv[:k_prime]
+            #     v = v[:k_prime, :]
+
+            #     rank_t = len(sv)
+
+            # else:
+            #     svsum = np.cumsum(sv) / np.sum(sv)
+            #     rank_relerr = np.searchsorted(svsum, 1 - relerr) + 1
+            #     rank_t = min(ltens.shape[-1], u.shape[1], rank, rank_relerr)
+
             yield sv, rank_t
+
             # If the compressed u is small enough, copy it and let the gc clean up the original u
             if u[:rank_t, :].size/u.size < 0.7:
                 newtens = (u[:, :rank_t].reshape(ltens.shape[:-1] + (rank_t, )).copy(),
                            matdot(sv[:rank_t, None] * v[:rank_t, :], self._lt[site + 1]))
+
             else:
                 newtens = (u[:, :rank_t].reshape(ltens.shape[:-1] + (rank_t, )),
                            matdot(sv[:rank_t, None] * v[:rank_t, :], self._lt[site + 1]))
+
             self._lt.update(slice(site, site + 2), newtens,
                             canonicalization=('left', None))
+
         yield np.sum(np.abs(self._lt[-1])**2)
 
     def singularvals(self):
