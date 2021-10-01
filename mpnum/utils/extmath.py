@@ -10,6 +10,8 @@ import scipy as sp
 from scipy.sparse.linalg import aslinearoperator
 from six.moves import range, zip
 
+from warnings import warn
+
 __all__ = ['block_diag', 'matdot', 'mkron', 'partial_trace',
            'truncated_svd', 'randomized_svd', 'lapack_svd']
 
