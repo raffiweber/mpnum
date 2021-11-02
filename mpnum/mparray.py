@@ -920,18 +920,24 @@ class MPArray(object):
         default_direction = 'left' if len(self) - rn > ln else 'right'
         direction = default_direction if direction is None else direction
         rank = max(self.ranks) if rank is None else rank
+	# new feature, list of spectral norm approximations along chain
+        spectral_norms = []
         if direction == 'right':
             if canonicalize:
                 self.canonicalize(right=1)
             for item in self._compress_svd_r(rank, relerr, svdfunc, trunc_svdfunc):
-                pass
-            return item
+                if type(item) == tuple:
+                    spectral_norms.append(item[0][item[1]-1]/item[0][0])
+                # pass
+            return (spectral_norms, item)
         elif direction == 'left':
             if canonicalize:
                 self.canonicalize(left=len(self) - 1)
             for item in self._compress_svd_l(rank, relerr, svdfunc, trunc_svdfunc):
-                pass
-            return item
+                if type(item) == tuple:
+                    spectral_norms.append(item[0][item[1]-1]/item[0][0])
+                # pass
+            return (spectral_norms, item)
         raise ValueError('{} is not a valid direction'.format(direction))
 
     def _compression_var(self, num_sweeps, startmpa=None, rank=None,
