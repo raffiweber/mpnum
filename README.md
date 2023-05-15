@@ -23,15 +23,15 @@ mpnum is a flexible, user-friendly, and expandable toolbox for the matrix produc
 * finding [extremal eigenvalues](http://mpnum.readthedocs.org/en/latest/mpnum.html#mpnum.linalg.eig) and eigenvectors of MPOs (DMRG)
 * flexible tools for new matrix product algorithms
 
-To install the latest stable version run
+To install the latest stable version run (this might be outdated for python 3.10)
 
     pip install mpnum
 
 If you want to install `mpnum` from source, please run (on Unix)
 
-    git clone https://github.com/dseuss/mpnum.git
+    git clone https://github.com/raffiweber/mpnum.git
     cd mpnum
-    pip install .
+    pip install --editable .
 
 In order to run the tests and build the documentation, you have to install the development dependencies via
 
