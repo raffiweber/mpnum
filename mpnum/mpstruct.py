@@ -132,7 +132,7 @@ class LocalTensors(object):
                 tens[:-1], tens[1:]))
             assert self[stop - 1].shape[-1] == tens[-1].shape[-1]
 
-            if not isinstance(canonicalization, collections.Sequence):
+            if not isinstance(canonicalization, collections.abc.Sequence):
                 canonicalization = it.repeat(canonicalization)
 
             for ten, pos, norm in zip(tens, range(*indices), canonicalization):
